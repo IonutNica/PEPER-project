@@ -1,1 +1,1584 @@
+import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
 
+from google.colab import files
+import pandas as pd
+
+# Încarcă fișierul Excel din sistemul local
+uploaded = files.upload()
+
+# Citește fișierul Excel într-un dataframe pandas
+df = pd.read_excel(next(iter(uploaded.keys())))
+
+# Statistici descriptive
+#print(df.describe())
+
+pip install geopandas
+
+# Definirea variabilelor de interes pentru Foot și Bike
+variables_foot = [ 'LF', 'HF', 'OAF', 'PEF', 'EF', 'SF', 'SPF', 'CMAF']
+variables_bike = [ 'LB', 'HB', 'OAB', 'PEB', 'EB', 'SB', 'SPB', 'CMAB']
+
+# Matricea de corelatie
+correlation_matrix = df[variables_foot + variables_bike].corr()
+print(correlation_matrix)
+
+
+import numpy as np
+
+#  'df' - dataframe
+variables_foot = ['CAF', 'LF', 'HF', 'OAF', 'PEF', 'EF', 'SF', 'SPF', 'CMAF']
+variables_bike = ['CAB', 'LB', 'HB', 'OAB', 'PEB', 'EB', 'SB', 'SPB', 'CMAB']
+
+# Ponderi ajustate pe baza analizei corelației și VIF
+weights_foot = [0.1, 0.05, 0.1, 0.05, 0.1, 0.05, 0.05, 0.1, 0.4]
+weights_bike = [0.1, 0.05, 0.1, 0.05, 0.1, 0.05, 0.05, 0.1, 0.4]
+
+# Calculul Indexului de Walkability pentru variabilele de tip Foot
+df['Walkability_Foot'] = df[variables_foot].dot(weights_foot)
+
+# Calculul Indexului de Walkability pentru variabilele de tip Bike
+df['Walkability_Bike'] = df[variables_bike].dot(weights_bike)
+
+# Vizualizarea primelor rezultate
+print(df[['Walkability_Foot', 'Walkability_Bike']].head())
+
+# Salvarea rezultatelor
+df.to_csv('walkability_index_adjusted.csv', index=False)
+
+# Matrici corelatie / districte
+
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Setarea fontului global la DejaVu Serif
+plt.rcParams['font.family'] = 'DejaVu Serif'
+
+# Definirea variabilelor de interes pentru Foot și Bike
+variables_foot = ['CAF', 'LF', 'HF', 'OAF', 'PEF', 'EF', 'SF', 'SPF', 'CMAF']
+variables_bike = ['CAB', 'LB', 'HB', 'OAB', 'PEB', 'EB', 'SB', 'SPB', 'CMAB']
+
+# Obținerea listelor cu sectoarele și sortarea lor pentru a itera în ordinea corectă
+sectors = sorted(df['District'].unique())
+
+# Afișarea matricilor de corelație câte 4 pe rând (2 pentru Foot și 2 pentru Bike)
+for i in range(0, len(sectors), 2):
+    fig, axes = plt.subplots(2, 2, figsize=(20, 16))
+
+    # Matricea de corelație pentru Foot - primul sector din setul curent
+    sns.heatmap(df[df['District'] == sectors[i]][variables_foot].corr(), annot=True, cmap="viridis", ax=axes[0, 0])
+    axes[0, 0].set_title(f'Correlation Matrix for {sectors[i]} - Foot')
+
+    # Matricea de corelație pentru Bike - primul sector din setul curent
+    sns.heatmap(df[df['District'] == sectors[i]][variables_bike].corr(), annot=True, cmap="viridis", ax=axes[0, 1])
+    axes[0, 1].set_title(f'Correlation Matrix for {sectors[i]} - Bike')
+
+    # Verificarea existenței unui al doilea sector în setul curent
+    if i + 1 < len(sectors):
+        sns.heatmap(df[df['District'] == sectors[i + 1]][variables_foot].corr(), annot=True, cmap="viridis", ax=axes[1, 0])
+        axes[1, 0].set_title(f'Correlation Matrix for {sectors[i + 1]} - Foot')
+
+        sns.heatmap(df[df['District'] == sectors[i + 1]][variables_bike].corr(), annot=True, cmap="viridis", ax=axes[1, 1])
+        axes[1, 1].set_title(f'Correlation Matrix for {sectors[i + 1]} - Bike')
+    else:
+        # Eliminăm subploturile goale în cazul în care nu există un al doilea sector
+        fig.delaxes(axes[1, 0])
+        fig.delaxes(axes[1, 1])
+
+    plt.tight_layout()
+    plt.show()
+
+# Geospatial analysis
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    elif value <= 20:
+        return '15-20 min'
+    else:
+        return '> 20 min'
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min', '15-20 min', '> 20 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+#Clasificare pentru AAF
+df['AAF_class']=df['AAF'].apply(classify_accessibility)
+df['AAF_class']=df['AAF_class'].astype(time_class_type)
+
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Vizualizarea hărților pentru AAF in întreg Bucureștiul
+fig, ax=plt.subplots(1,1, figsize=(10,8))
+cmap=plt.get_cmap('viridis')
+gdf_bucharest.plot(column='AAF_class', cmap=cmap, legend=False, categorical=True, ax=ax)
+
+# Setarea titlului si etichetelor
+plt.title('Bucharest-AAF (Average Accessibility on Foot)', fontsize=10, fontname='DejaVu Serif')
+ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei
+handles = []
+for i, cls in enumerate(time_classes):
+        color = cmap(i / (len(time_classes) - 1))  # Obține culoarea corespunzătoare din cmap
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+plt.tight_layout(rect=[0, 0, 0.85, 1])  # Ajustează layout-ul pentru legendă
+plt.show()
+
+# AAF pe districts
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    elif value <= 20:
+        return '15-20 min'
+    else:
+        return '> 20 min'
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min', '15-20 min', '> 20 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Aplicarea clasificării pe intervale de timp pentru AAF și AAB
+df['AAF_class'] = df['AAF'].apply(classify_accessibility)
+df['AAF_class'] = df['AAF_class'].astype(time_class_type)
+df['AAB_class'] = df['AAB'].apply(classify_accessibility)
+df['AAB_class'] = df['AAB_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Vizualizarea hărților pentru fiecare district, pentru AAF și AAB
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+
+    # Harta pentru AAF
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    cmap = plt.get_cmap('viridis')
+    gdf_district.plot(column='AAF_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=100)
+
+    plt.title(f'District {district} - AAF (Average Accessibility on Foot) - Time Classes', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    handles = []
+    for i, cls in enumerate(time_classes):
+        color = cmap(i / (len(time_classes) - 1))
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+    # Harta pentru AAB
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    cmap = plt.get_cmap('viridis')
+    gdf_district.plot(column='AAB_class', cmap=cmap, legend=False, categorical=True, ax=ax)
+
+    plt.title(f'District {district} - AAB (Average Accessibility by Bike) - Time Classes', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    handles = []
+    for i, cls in enumerate(time_classes):
+        color = cmap(i / (len(time_classes) - 1))
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+# AAB on bike
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    elif value <= 20:
+        return '15-20 min'
+    else:
+        return '> 20 min'
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min', '15-20 min', '> 20 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+#Clasificare pentru AAF
+df['AAB_class']=df['AAB'].apply(classify_accessibility)
+df['AAB_class']=df['AAB_class'].astype(time_class_type)
+
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Vizualizarea hărților pentru AAF in întreg Bucureștiul
+fig, ax=plt.subplots(1,1, figsize=(10,8))
+cmap=plt.get_cmap('viridis')
+gdf_bucharest.plot(column='AAB_class', cmap=cmap, legend=False, categorical=True, ax=ax)
+
+# Setarea titlului si etichetelor
+plt.title('Bucharest-AAB (Average Accessibility by Bike)', fontsize=10, fontname='DejaVu Serif')
+ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei
+handles = []
+for i, cls in enumerate(time_classes):
+        color = cmap(i / (len(time_classes) - 1))  # Obține culoarea corespunzătoare din cmap
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+plt.tight_layout(rect=[0, 0, 0.85, 1])  # Ajustează layout-ul pentru legendă
+plt.show()
+
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    elif value <= 20:
+        return '15-20 min'
+    else:
+        return '> 20 min'
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min', '15-20 min', '> 20 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Aplicarea clasificării pe intervale de timp pentru AAF și AAB
+df['AAB_class'] = df['AAB'].apply(classify_accessibility)
+df['AAB_class'] = df['AAB_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Vizualizarea hărților pentru fiecare district, pentru AAF și AAB
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+
+    # Harta pentru AAB
+    fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+    cmap = plt.get_cmap('viridis')
+    gdf_district.plot(column='AAB_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=100)
+
+    plt.title(f'District {district} - AAB (Average Accessibility by Bike) - Time Classes', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    handles = []
+    for i, cls in enumerate(time_classes):
+        color = cmap(i / (len(time_classes) - 1))
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+# Scenario 1
+#!pip install osmnx
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor LF și HF într-o singură variabilă medie
+df['LF_HF_mean'] = df[['LF', 'HF']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie LF_HF
+df['LF_HF_class'] = df['LF_HF_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['LF_HF_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df['LF_HF_class'] = df['LF_HF_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Paletă viridis cu culorile din primele 4 intervale
+viridis = plt.get_cmap('viridis', 5)  # Extrage paleta pentru 5 intervale
+custom_colors = [viridis(0.0), viridis(0.25), viridis(0.5)]  # Folosește primele 3 culori din 4 intervale
+cmap = mcolors.ListedColormap(custom_colors)
+
+# Harta pentru întregul București
+fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+
+# Plotează limitele districtelor fără contur
+gdf_district_boundaries.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru București
+
+# Plotează punctele clasificate pentru întreg Bucureștiul
+gdf_bucharest.plot(column='LF_HF_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=50)
+
+plt.title('Bucharest - Scenario 1:Accessibility to Learning and Healthcare', fontsize=14, fontname='DejaVu Serif')
+ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+# Crearea manuală a legendei
+handles = []
+for i, cls in enumerate(time_classes):
+    color = custom_colors[i]
+    patch = mpatches.Patch(color=color, label=cls)
+    handles.append(patch)
+
+ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+          title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+plt.tight_layout(rect=[0, 0, 0.85, 1])
+plt.show()
+
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor LB și HB într-o singură variabilă medie
+df['LF_HF_mean'] = df[['LF', 'HF']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie LF_HF
+df['LF_HF_class'] = df['LF_HF_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['LF_HF_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df['LF_HF_class'] = df['LF_HF_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Paletă viridis cu culorile din primele 4 intervale
+viridis = plt.get_cmap('viridis', 5)  # Extrage paleta pentru 5 intervale
+custom_colors = [viridis(0.0), viridis(0.25), viridis(0.5)]  # Folosește primele 3 culori din 4 intervale
+cmap = mcolors.ListedColormap(custom_colors)
+
+# Vizualizarea hărților pe sectoare
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+    gdf_district_boundary = gdf_district_boundaries[gdf_district_boundaries['District'] == district]
+
+    # Harta pentru combinarea LB și HB
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+    # Plotează limitele districtului fără contur
+    gdf_district_boundary.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru district
+
+    # Plotează punctele clasificate
+    gdf_district.plot(column='LF_HF_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=40)
+
+    plt.title(f'{district} - Scenario 1: Accessibility to Learning and Healthcare', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei
+    handles = []
+    for i, cls in enumerate(time_classes):
+        color = custom_colors[i]
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    ax.set_xlim(gdf_district_boundary.total_bounds[[0, 2]])  # Focalizare pe district
+    ax.set_ylim(gdf_district_boundary.total_bounds[[1, 3]])
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+Scenario 1 by bike
+#!pip install osmnx
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor LF și HF într-o singură variabilă medie
+df['LB_HB_mean'] = df[['LB', 'HB']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie LF_HF
+df['LB_HB_class'] = df['LB_HB_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['LB_HB_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df['LB_HB_class'] = df['LB_HB_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Paletă viridis cu culorile din primele 4 intervale
+viridis = plt.get_cmap('viridis', 5)  # Extrage paleta pentru 5 intervale
+custom_colors = [viridis(0.0), viridis(0.25), viridis(0.5)]  # Folosește primele 3 culori din 4 intervale
+cmap = mcolors.ListedColormap(custom_colors)
+
+# Harta pentru întregul București
+fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+
+# Plotează limitele districtelor fără contur
+gdf_district_boundaries.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru București
+
+# Plotează punctele clasificate pentru întreg Bucureștiul
+gdf_bucharest.plot(column='LB_HB_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=50)
+
+plt.title('Bucharest - Scenario 1:Accessibility to Learning and Healthcare', fontsize=14, fontname='DejaVu Serif')
+ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+# Crearea manuală a legendei
+handles = []
+for i, cls in enumerate(time_classes):
+    color = custom_colors[i]
+    patch = mpatches.Patch(color=color, label=cls)
+    handles.append(patch)
+
+ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+          title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+plt.tight_layout(rect=[0, 0, 0.85, 1])
+plt.show()
+
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor LB și HB într-o singură variabilă medie
+df['LB_HB_mean'] = df[['LB', 'HB']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie LF_HF
+df['LB_HB_class'] = df['LB_HB_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['LB_HB_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df['LB_HB_class'] = df['LB_HB_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Paletă viridis cu culorile din primele 4 intervale
+viridis = plt.get_cmap('viridis', 5)  # Extrage paleta pentru 5 intervale
+custom_colors = [viridis(0.0), viridis(0.25), viridis(0.5)]  # Folosește primele 3 culori din 4 intervale
+cmap = mcolors.ListedColormap(custom_colors)
+
+# Vizualizarea hărților pe sectoare
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+    gdf_district_boundary = gdf_district_boundaries[gdf_district_boundaries['District'] == district]
+
+    # Harta pentru combinarea LB și HB
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+    # Plotează limitele districtului fără contur
+    gdf_district_boundary.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru district
+
+    # Plotează punctele clasificate
+    gdf_district.plot(column='LB_HB_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=40)
+
+    plt.title(f'{district} - Scenario 1: Accessibility to Learning and Healthcare', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei
+    handles = []
+    for i, cls in enumerate(time_classes):
+        color = custom_colors[i]
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    ax.set_xlim(gdf_district_boundary.total_bounds[[0, 2]])  # Focalizare pe district
+    ax.set_ylim(gdf_district_boundary.total_bounds[[1, 3]])
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+# Scenario 2
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor LB și HB într-o singură variabilă medie
+df['CMAF_SF_mean'] = df[['CMAF', 'SF']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie LF_HF
+df['CMAF_SF_class'] = df['CMAF_SF_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['CMAF_SF_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df.loc[:, 'CMAF_SF_class'] = df['CMAF_SF_class'].astype(time_class_type)
+
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Paletă viridis cu culorile din primele 4 intervale
+viridis = plt.get_cmap('viridis', 5)  # Extrage paleta pentru 5 intervale
+custom_colors = [viridis(0.0), viridis(0.25), viridis(0.5)]  # Folosește primele 3 culori din 4 intervale
+cmap = mcolors.ListedColormap(custom_colors)
+
+# Vizualizarea hărților pe sectoare
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+    gdf_district_boundary = gdf_district_boundaries[gdf_district_boundaries['District'] == district]
+
+    # Harta pentru combinarea LB și HB
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+    # Plotează limitele districtului fără contur
+    gdf_district_boundary.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru district
+
+    # Plotează punctele clasificate
+    gdf_district.plot(column='CMAF_SF_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=20)
+
+    plt.title(f'{district} - Essential Services and Mobility', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei
+    handles = []
+    for i, cls in enumerate(time_classes):
+        color = custom_colors[i]
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    ax.set_xlim(gdf_district_boundary.total_bounds[[0, 2]])  # Focalizare pe district
+    ax.set_ylim(gdf_district_boundary.total_bounds[[1, 3]])
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor LB și HB într-o singură variabilă medie
+df['CMAF_SF_mean'] = df[['CMAF', 'SF']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie LF_HF
+df['CMAF_SF_class'] = df['CMAF_SF_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['CMAF_SF_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df.loc[:, 'CMAF_SF_class'] = df['CMAF_SF_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Paletă viridis cu culorile din primele 4 intervale
+viridis = plt.get_cmap('viridis', 5)  # Extrage paleta pentru 5 intervale
+
+# Asigurarea ordinii corecte pentru culori în funcție de intervalele de timp
+custom_colors = [viridis(0.0), viridis(0.25), viridis(0.5)]  # Culoare pentru 0-5 min, 5-10 min, 10-15 min
+cmap = mcolors.ListedColormap(custom_colors)
+
+# Vizualizarea hărților pe sectoare
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+    gdf_district_boundary = gdf_district_boundaries[gdf_district_boundaries['District'] == district]
+
+    # Harta pentru combinarea LB și HB
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+    # Plotează limitele districtului fără contur
+    gdf_district_boundary.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru district
+
+    # Plotează punctele clasificate
+    gdf_district.plot(column='CMAF_SF_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=20)
+
+    plt.title(f'{district} - Essential Services and Mobility', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei
+    handles = []
+    for i, cls in enumerate(time_classes):
+        color = custom_colors[i]
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    ax.set_xlim(gdf_district_boundary.total_bounds[[0, 2]])  # Focalizare pe district
+    ax.set_ylim(gdf_district_boundary.total_bounds[[1, 3]])
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+# Export date
+import pandas as pd
+from google.colab import files
+
+# Gruparea datelor după 'District' și 'LB_HB_class' și numărarea punctelor în fiecare categorie
+agg_data = df.groupby(['District', 'CMAF_SF_class']).size().unstack(fill_value=0)
+
+# Afișarea tabelului rezultat
+print(agg_data)
+
+# Salvarea rezultatului într-un fișier Excel
+output_file = ' Essential Services and Mobility.xlsx'
+agg_data.to_excel(output_file)
+
+# Descărcarea fișierului în PC
+files.download(output_file)
+
+print(f"Datele au fost exportate cu succes în fișierul '{output_file}'")
+
+# Scenario 3
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor LB și HB într-o singură variabilă medie
+df['OAF_PEF_CAF_mean'] = df[['OAF', 'PEF', 'CAF']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie LF_HF
+df['OAF_PEF_CAF_class'] = df['OAF_PEF_CAF_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['OAF_PEF_CAF_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df.loc[:, 'OAF_PEF_CAF_class'] = df['OAF_PEF_CAF_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Paletă viridis cu culorile din primele 4 intervale
+viridis = plt.get_cmap('viridis', 5)  # Extrage paleta pentru 5 intervale
+
+# Definirea culorilor corecte pentru fiecare clasă
+custom_colors = [viridis(0.0), viridis(0.5), viridis(0.25)]  # 0-5 min, 5-10 min, 10-15 min
+cmap = mcolors.ListedColormap(custom_colors)
+
+# Vizualizarea hărților pe sectoare
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+    gdf_district_boundary = gdf_district_boundaries[gdf_district_boundaries['District'] == district]
+
+    # Harta pentru combinarea LB și HB
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+    # Plotează limitele districtului fără contur
+    gdf_district_boundary.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru district
+
+    # Plotează punctele clasificate
+    gdf_district.plot(column='OAF_PEF_CAF_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=20)
+
+    plt.title(f'{district} - Wellbeing and Life Quality', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei
+    handles = []
+    for i, cls in enumerate(time_classes):
+        color = custom_colors[i]
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    ax.set_xlim(gdf_district_boundary.total_bounds[[0, 2]])  # Focalizare pe district
+    ax.set_ylim(gdf_district_boundary.total_bounds[[1, 3]])
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor LB și HB într-o singură variabilă medie
+df['OAF_PEF_CAF_mean'] = df[['OAF', 'PEF', 'CAF']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie LF_HF
+df['OAF_PEF_CAF_class'] = df['OAF_PEF_CAF_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['OAF_PEF_CAF_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df.loc[:, 'OAF_PEF_CAF_class'] = df['OAF_PEF_CAF_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Paletă viridis cu culorile din primele 4 intervale
+viridis = plt.get_cmap('viridis', 5)
+
+# Definirea culorilor corecte pentru fiecare clasă
+custom_colors = {'0-5 min': viridis(0.0), '5-10 min': viridis(0.25), '10-15 min': viridis(0.5)}
+
+# Vizualizarea hărților pe sectoare
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+    gdf_district_boundary = gdf_district_boundaries[gdf_district_boundaries['District'] == district]
+
+    # Filtrează clasele de timp care au date
+    available_classes = gdf_district['OAF_PEF_CAF_class'].unique()
+    available_colors = [custom_colors[cls] for cls in available_classes]
+
+    # Crearea hărții
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+    # Plotează limitele districtului fără contur
+    gdf_district_boundary.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru district
+
+    # Plotează punctele clasificate
+    cmap = mcolors.ListedColormap(available_colors)
+    gdf_district.plot(column='OAF_PEF_CAF_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=20)
+
+    plt.title(f'{district} - Wellbeing and Life Quality', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei doar pentru clasele disponibile
+    handles = []
+    for cls in available_classes:
+        color = custom_colors[cls]
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    ax.set_xlim(gdf_district_boundary.total_bounds[[0, 2]])  # Focalizare pe district
+    ax.set_ylim(gdf_district_boundary.total_bounds[[1, 3]])
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+# Scenario 4
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor OAB, PEB, CAB într-o singură variabilă medie
+df['EF_SPF_mean'] = df[['EF', 'SPF']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie OAB_PEB_CAB_mean
+df['EF_SPF_class'] = df['EF_SPF_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['EF_SPF_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df.loc[:, 'EF_SPF_class'] = df['EF_SPF_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Definirea culorilor corecte pentru fiecare clasă
+custom_colors = {'0-5 min': viridis(0.0), '5-10 min': viridis(0.25), '10-15 min': viridis(0.5)}
+
+# Sortarea claselor disponibile
+gdf_bucharest['EF_SPF_class'] = pd.Categorical(gdf_bucharest['EF_SPF_class'], categories=time_classes, ordered=True)
+
+# Vizualizarea hărților pe sectoare
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+    gdf_district_boundary = gdf_district_boundaries[gdf_district_boundaries['District'] == district]
+
+    # Filtrează clasele de timp care au date
+    available_classes = gdf_district['EF_SPF_class'].unique()
+    available_classes = [cls for cls in time_classes if cls in available_classes]  # Păstrează ordinea corectă
+    available_colors = [custom_colors[cls] for cls in available_classes]
+
+    # Crearea hărții
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+    # Plotează limitele districtului fără contur
+    gdf_district_boundary.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru district
+
+    # Plotează punctele clasificate
+    cmap = mcolors.ListedColormap(available_colors)
+    gdf_district.plot(column='EF_SPF_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=20)
+
+    plt.title(f'{district} - Food Access and Provision', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei doar pentru clasele disponibile
+    handles = []
+    for cls in available_classes:
+        color = custom_colors[cls]
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    ax.set_xlim(gdf_district_boundary.total_bounds[[0, 2]])  # Focalizare pe district
+    ax.set_ylim(gdf_district_boundary.total_bounds[[1, 3]])
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor LF și HF într-o singură variabilă medie
+df['EF_SPF_mean'] = df[['EF', 'SPF']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie LF_HF
+df['EF_SPF_class'] = df['EF_SPF_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['EF_SPF_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+# Asigură-te că modificarea se aplică direct pe DataFrame
+df.loc[:, 'EF_SPF_class'] = df['EF_SPF_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Asigurarea ordinii corecte pentru paleta de culori în funcție de clase
+custom_colors = {'0-5 min': viridis(0.0), '5-10 min': viridis(0.5), '10-15 min': viridis(0.25)}
+
+# Crearea manuală a legendei
+handles = [mpatches.Patch(color=custom_colors[cls], label=cls) for cls in time_classes]
+
+# Harta pentru întregul București
+fig, ax = plt.subplots(1, 1, figsize=(12, 10))
+
+# Plotează limitele districtelor fără contur
+gdf_district_boundaries.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru București
+
+# Plotează punctele clasificate pentru întreg Bucureștiul
+gdf_bucharest.plot(column='EF_SPF_class', cmap=mcolors.ListedColormap([custom_colors[cls] for cls in time_classes]),
+                   legend=False, categorical=True, ax=ax, markersize=50)
+
+plt.title('Bucharest - Food Access and Provision', fontsize=14, fontname='DejaVu Serif')
+ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+# Adăugarea legendei cu ordine corectă
+ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+          title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+plt.tight_layout(rect=[0, 0, 0.85, 1])
+plt.show()
+import osmnx as ox
+import geopandas as gpd
+import matplotlib.pyplot as plt
+import matplotlib.patches as mpatches
+from pandas.api.types import CategoricalDtype
+import matplotlib.colors as mcolors
+
+# Codificari Sectoare Bucuresti
+sector_osm_ids = {
+    "District 1": 'R7960954',
+    "District 2": 'R7960953',
+    "District 3": 'R7960937',
+    "District 4": 'R7960957',
+    "District 5": 'R7960956',
+    "District 6": 'R7960955'
+}
+
+# Crearea unui GeoDataFrame pentru limitele districtelor
+gdf_district_boundaries = gpd.GeoDataFrame()
+
+for district, osm_id in sector_osm_ids.items():
+    # Descarcă limitele sectorului din OSM
+    gdf = ox.geocode_to_gdf(osm_id, by_osmid=True)
+    gdf['District'] = district
+    gdf_district_boundaries = pd.concat([gdf_district_boundaries, gdf], ignore_index=True)
+
+gdf_district_boundaries.set_crs(epsg=4326, inplace=True)
+
+# Funcție pentru a clasifica accesibilitatea în intervale de timp
+def classify_accessibility(value):
+    if value <= 5:
+        return '0-5 min'
+    elif value <= 10:
+        return '5-10 min'
+    elif value <= 15:
+        return '10-15 min'
+    else:
+        return None  # Returnează None pentru valorile care nu sunt în intervalul 0-15 min
+
+# Definirea ordinii categoriilor
+time_classes = ['0-5 min', '5-10 min', '10-15 min']
+time_class_type = CategoricalDtype(categories=time_classes, ordered=True)
+
+# Combinarea variabilelor OAB, PEB, CAB într-o singură variabilă medie
+df['EB_SPB_mean'] = df[['EB', 'SPB']].mean(axis=1)
+
+# Aplicarea clasificării pe intervale de timp pentru variabila medie OAB_PEB_CAB_mean
+df['EB_SPB_class'] = df['EB_SPB_mean'].apply(classify_accessibility)
+df = df.dropna(subset=['EB_SPB_class'])  # Păstrează doar rândurile care au valori clasificate între 0-15 min
+df.loc[:, 'EB_SPB_class'] = df['EB_SPB_class'].astype(time_class_type)
+
+# Crearea unui GeoDataFrame pentru întreg Bucureștiul
+gdf_bucharest = gpd.GeoDataFrame(
+    df,
+    geometry=gpd.points_from_xy(df['centroid_lon'], df['centroid_lat']),
+    crs="EPSG:4326"
+)
+
+# Definirea culorilor corecte pentru fiecare clasă
+custom_colors = {'0-5 min': viridis(0.0), '5-10 min': viridis(0.25), '10-15 min': viridis(0.5)}
+
+# Sortarea claselor disponibile
+gdf_bucharest['EB_SPB_class'] = pd.Categorical(gdf_bucharest['EB_SPB_class'], categories=time_classes, ordered=True)
+
+# Vizualizarea hărților pe sectoare
+districts = gdf_bucharest['District'].unique()
+
+for district in districts:
+    # Filtrare pentru districtul curent
+    gdf_district = gdf_bucharest[gdf_bucharest['District'] == district]
+    gdf_district_boundary = gdf_district_boundaries[gdf_district_boundaries['District'] == district]
+
+    # Filtrează clasele de timp care au date
+    available_classes = gdf_district['EB_SPB_class'].unique()
+    available_classes = [cls for cls in time_classes if cls in available_classes]  # Păstrează ordinea corectă
+    available_colors = [custom_colors[cls] for cls in available_classes]
+
+    # Crearea hărții
+    fig, ax = plt.subplots(1, 1, figsize=(6, 6))
+
+    # Plotează limitele districtului fără contur
+    gdf_district_boundary.plot(ax=ax, edgecolor='none', facecolor='lightgrey')  # Fundal deschis pentru district
+
+    # Plotează punctele clasificate
+    cmap = mcolors.ListedColormap(available_colors)
+    gdf_district.plot(column='EB_SPB_class', cmap=cmap, legend=False, categorical=True, ax=ax, markersize=100)
+
+    plt.title(f'{district} - Food Access and Provision', fontsize=10, fontname='DejaVu Serif')
+    ax.set_xlabel('Longitude', fontsize=12, fontname='DejaVu Serif')
+    ax.set_ylabel('Latitude', fontsize=12, fontname='DejaVu Serif')
+
+    # Crearea manuală a legendei doar pentru clasele disponibile
+    handles = []
+    for cls in available_classes:
+        color = custom_colors[cls]
+        patch = mpatches.Patch(color=color, label=cls)
+        handles.append(patch)
+
+    ax.legend(handles=handles, loc='center left', bbox_to_anchor=(1, 0.5), title="Time Classes",
+              title_fontsize=10, prop={'size': 10, 'family': 'DejaVu Serif'})
+
+    ax.set_xlim(gdf_district_boundary.total_bounds[[0, 2]])  # Focalizare pe district
+    ax.set_ylim(gdf_district_boundary.total_bounds[[1, 3]])
+
+    plt.tight_layout(rect=[0, 0, 0.85, 1])
+    plt.show()
+
+# Calcul densitatea populatiei
+import geopandas as gpd
+
+# Asumăm că 'df' are deja obiecte geometrice valide în coloana 'geometry'
+# Crearea GeoDataFrame-ului
+gdf = gpd.GeoDataFrame(df, geometry='geometry')
+
+# Setează sistemul de coordonate inițial dacă nu este deja setat
+gdf = gdf.set_crs("EPSG:4326")
+
+# Transformă în sistem de coordonate metrice (Metri)
+gdf = gdf.to_crs(epsg=3857)
+
+# Calculează aria
+gdf['area_sqm'] = gdf['geometry'].area
+
+# Calculează densitatea populației (locuitori/metru pătrat)
+gdf['population_density'] = gdf['population'] / gdf['area_sqm']
+
+# Verificăm primele rânduri pentru a vedea calculul
+print(gdf[['id', 'population', 'area_sqm', 'population_density']].head())
+import matplotlib.pyplot as plt
+import matplotlib.ticker as mticker
+
+# Crearea hărții pentru densitatea populației
+fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+gdf.plot(column='population_density', cmap='viridis', legend=True, ax=ax)
+plt.title('Harta Densității Populației în București')
+
+# Formatarea axelor pentru a elimina notarea științifică
+ax.xaxis.set_major_formatter(mticker.FuncFormatter(lambda x, _: f'{x:,.0f}'))
+ax.yaxis.set_major_formatter(mticker.FuncFormatter(lambda y, _: f'{y:,.0f}'))
+
+plt.show()
+
+# Analiza Cluster
+
+from sklearn.cluster import KMeans
+from sklearn.preprocessing import StandardScaler
+import matplotlib.pyplot as plt
+import seaborn as sns
+
+# Selectăm variabilele de interes pentru clustering
+variables = ['population_density', 'AAF', 'AAB']
+
+# Extragem datele relevante
+X = gdf[variables]
+
+# Normalizăm datele
+scaler = StandardScaler()
+X_scaled = scaler.fit_transform(X)
+
+# Aplicăm K-Means cu un număr de clustere K (de exemplu, 4)
+kmeans = KMeans(n_clusters=4, random_state=0)
+gdf['cluster'] = kmeans.fit_predict(X_scaled)
+
+# Incrementăm valorile din 'cluster' pentru a începe de la 1 în loc de 0
+gdf['cluster'] = gdf['cluster'] + 1
+
+# Vizualizăm clusterele pe harta Bucureștiului
+fig, ax = plt.subplots(1, 1, figsize=(10, 8))
+gdf.plot(column='cluster', cmap='viridis', legend=True, ax=ax)
+plt.title('Clusterele Zonelor din București')
+plt.show()
+
+# Vizualizarea distribuției clusterelor în funcție de variabile
+sns.pairplot(gdf, hue='cluster', vars=variables)
+plt.show()
+
+from sklearn.metrics import silhouette_score
+
+silhouette_scores = []
+
+for k in range(2, 11):  # K începe de la 2 pentru Silhouette Score
+    kmeans = KMeans(n_clusters=k, random_state=0)
+    cluster_labels = kmeans.fit_predict(X_scaled)
+    silhouette_avg = silhouette_score(X_scaled, cluster_labels)
+    silhouette_scores.append(silhouette_avg)
+
+# Graficul pentru Silhouette Score
+plt.plot(range(2, 11), silhouette_scores, marker='o')
+plt.xlabel('Numărul de Clustere K')
+plt.ylabel('Silhouette Score')
+plt.title('Silhouette Score pentru Diferite Valori ale K')
+plt.show()
+import pandas as pd
+
+# Gruparea datelor pe clustere și calcularea statisticilor descriptive
+cluster_summary = gdf.groupby('cluster').agg({
+    'population_density': ['mean', 'std', 'min', 'max'],
+    'AAF': ['mean', 'std', 'min', 'max'],
+    'AAB': ['mean', 'std', 'min', 'max']
+}).reset_index()
+
+# Afișarea tabelului cu statisticile descriptive
+print(cluster_summary)
+from scipy.cluster.hierarchy import dendrogram, linkage
+import matplotlib.pyplot as plt
+
+# Clustering ierarhic
+linked = linkage(X_scaled, method='ward')
+
+# Crearea dendogramei
+plt.figure(figsize=(10, 7))
+dendrogram(linked,
+           orientation='top',
+           distance_sort='descending',
+           show_leaf_counts=False,  # Nu arătăm numărul de observații
+           no_labels=True)  # Nu arătăm etichetele pe axa x
+
+# Adăugarea liniei de tăietură pentru a indica cele 3 clustere
+plt.axhline(y=linked[-3, 2], color='r', linestyle='--')
+
+plt.title('Dendogramă pentru Clustering Ierarhic')
+plt.xlabel('Observații')
+plt.ylabel('Distanță')
+plt.show()
